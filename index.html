@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="https://public-frontend-cos.metadl.com/mgx/img/favicon.png" type="image/png">
+    <title>Team Generator Pro</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>⚽ Team Generator Pro</h1>
+            <p class="subtitle">Create balanced teams with player stats</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Person Management Section -->
+            <section class="section" id="person-section">
+                <h2>👥 Manage Players</h2>
+                <button class="btn btn-primary" id="add-person-btn">+ Add New Player</button>
+                <div class="persons-grid" id="persons-grid"></div>
+            </section>
+
+            <!-- Team Generator Section -->
+            <section class="section" id="generator-section">
+                <h2>🎲 Generate Teams</h2>
+                <div class="generator-form">
+                    <div class="form-group">
+                        <label for="num-teams">Number of Teams:</label>
+                        <input type="number" id="num-teams" min="2" max="10" value="2">
+                    </div>
+                    <button class="btn btn-success" id="generate-btn">Generate Teams</button>
+                    <button class="btn btn-secondary" id="save-teams-btn" style="display:none;">Save Current Teams</button>
+                </div>
+                <div class="teams-display" id="teams-display"></div>
+            </section>
+
+            <!-- Saved Teams Section -->
+            <section class="section" id="history-section">
+                <h2>📋 Saved Teams</h2>
+                <div class="saved-teams-list" id="saved-teams-list"></div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Add/Edit Person Modal -->
+    <div class="modal" id="person-modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modal-title">Add New Player</h2>
+            <form id="person-form">
+                <input type="hidden" id="person-id">
+                
+                <div class="form-group">
+                    <label for="person-name">Name:</label>
+                    <input type="text" id="person-name" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="person-photo">Photo:</label>
+                    <input type="file" id="person-photo" accept="image/*">
+                    <div class="photo-preview" id="photo-preview"></div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="form-group">
+                        <label for="stat-pace">Pace:</label>
+                        <input type="number" id="stat-pace" min="1" max="99" value="75">
+                    </div>
+                    <div class="form-group">
+                        <label for="stat-shooting">Shooting:</label>
+                        <input type="number" id="stat-shooting" min="1" max="99" value="75">
+                    </div>
+                    <div class="form-group">
+                        <label for="stat-passing">Passing:</label>
+                        <input type="number" id="stat-passing" min="1" max="99" value="75">
+                    </div>
+                    <div class="form-group">
+                        <label for="stat-dribbling">Dribbling:</label>
+                        <input type="number" id="stat-dribbling" min="1" max="99" value="75">
+                    </div>
+                    <div class="form-group">
+                        <label for="stat-defending">Defending:</label>
+                        <input type="number" id="stat-defending" min="1" max="99" value="75">
+                    </div>
+                    <div class="form-group">
+                        <label for="stat-physical">Physical:</label>
+                        <input type="number" id="stat-physical" min="1" max="99" value="75">
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Save Player</button>
+                    <button type="button" class="btn btn-secondary" id="cancel-btn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="./script.js"></script>
+</body>
+
+</html>

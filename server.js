@@ -6,24 +6,24 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+// PORT is no longer strictly necessary for Vercel deployment, but can remain for local testing
+const PORT = process.env.PORT || 3000; 
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+// ⚠️ WARNING: These static file serving lines are generally not effective 
+// for persistent file storage/serving in Vercel Serverless Functions.
 app.use(express.static(__dirname));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// ----------------------------------------------------------------------
 // File Upload Configuration
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
-    }
-});
+// ⚠️ WARNING: Disk Storage will not work for persistent storage on Vercel.
+// Use multer.memoryStorage() temporarily, and plan to use an external service (S3/Vercel Blob) later.
+
+// Using memory storage to prevent immediate errors on Vercel's read-only filesystem
+const storage = multer.memoryStorage(); 
 
 const upload = multer({ 
     storage: storage,
@@ -41,7 +41,9 @@ const upload = multer({
     }
 });
 
-// MongoDB Connection
+// ----------------------------------------------------------------------
+// MongoDB Connection and Management
+
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/teamgenerator';
 let db;
 
@@ -51,11 +53,32 @@ async function connectDB() {
         db = client.db();
         console.log('Connected to MongoDB');
     } catch (error) {
+        // In a serverless environment, avoid process.exit(1). Let the function fail gracefully.
         console.error('MongoDB connection error:', error);
-        process.exit(1);
+        throw new Error('Database connection failed.'); 
     }
 }
 
+// ----------------------------------------------------------------------
+// NEW: Connection Middleware (for Serverless environment)
+
+// This middleware ensures the DB connection is established before processing any request.
+app.use(async (req, res, next) => {
+    // If the 'db' variable is not set (first invocation or cold start), connect.
+    if (!db) {
+        try {
+            await connectDB();
+            next();
+        } catch (error) {
+            // Send a 500 error if the connection fails
+            res.status(500).json({ error: 'Internal Server Error: Database unavailable.' });
+        }
+    } else {
+        next();
+    }
+});
+
+// ----------------------------------------------------------------------
 // API Routes
 
 // Get all persons
@@ -72,12 +95,14 @@ app.get('/api/persons', async (req, res) => {
 app.post('/api/persons', upload.single('photo'), async (req, res) => {
     try {
         const { name, stats } = req.body;
-        const photo = req.file ? `/uploads/${req.file.filename}` : null;
+        // NOTE: req.file is a Buffer in memory now, not a file path.
+        // For persistence, you MUST upload this buffer to S3/Blob storage.
+        const photo = req.file ? `Buffer_in_Memory:${req.file.size}` : null;
         
         const person = {
             name,
             stats: JSON.parse(stats),
-            photo,
+            photo, // Storing the photo buffer size, pathing will fail.
             createdAt: new Date()
         };
         
@@ -101,7 +126,8 @@ app.put('/api/persons/:id', upload.single('photo'), async (req, res) => {
         };
         
         if (req.file) {
-            updateData.photo = `/uploads/${req.file.filename}`;
+            // NOTE: File upload requires external storage solution.
+            updateData.photo = `Buffer_in_Memory:${req.file.size}`;
         }
         
         const result = await db.collection('persons').updateOne(
@@ -178,9 +204,9 @@ app.delete('/api/teams/:id', async (req, res) => {
     }
 });
 
-// Start Server
-connectDB().then(() => {
-    app.listen(PORT, () => {
-        console.log(`Server running on http://localhost:${PORT}`);
-    });
-});
+// ----------------------------------------------------------------------
+// VERCEL COMPATIBILITY FIX: Export the Express app instance
+
+// Removed the app.listen() call.
+// This is the line that tells Vercel's Serverless Runtime what to execute.
+module.exports = app;

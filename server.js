@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 3000; 
 
 // ✅ FIX: Define the static path to the 'public' folder. 
-// This requires index.html, style.css, and script.js to be moved there.
+// This requires index.html, style.css, and script.js to be MOVED there.
 const staticPath = path.join(__dirname, 'public'); 
 
 // Middleware
@@ -18,7 +18,7 @@ app.use(cors());
 app.use(express.json());
 
 // --------------------------------------------------------
-// FRONTEND SERVING FIX (Resolves "Cannot GET /" and 404s for static files)
+// FRONTEND SERVING FIX (Resolves 404s for static assets)
 // --------------------------------------------------------
 
 // 1. Serve static files (CSS, JS, images, index.html) from the 'public' directory
@@ -26,38 +26,21 @@ app.use(express.static(staticPath));
 
 // 2. Define the route for the root path ('/') to serve the index.html file
 app.get('/', (req, res) => {
-    // Send the index.html file from the public directory
     res.sendFile(path.join(staticPath, 'index.html'));
 });
 
 // ----------------------------------------------------------------------
-// File Upload Configuration (Using memory storage for Vercel compatibility)
+// File Upload Configuration (Ignored in API routes for stability)
 // ----------------------------------------------------------------------
 
-// Using memory storage to prevent disk write errors on Vercel's read-only filesystem
+// Keep storage defined, but its use in API routes is removed.
 const storage = multer.memoryStorage(); 
-
-const upload = multer({ 
-    storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-    fileFilter: (req, file, cb) => {
-        const allowedTypes = /jpeg|jpg|png|gif/;
-        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = allowedTypes.test(file.mimetype);
-        
-        if (mimetype && extname) {
-            return cb(null, true);
-        } else {
-            cb(new Error('Only image files are allowed!'));
-        }
-    }
-});
+const upload = multer({ storage: storage, limits: { fileSize: 5 * 1024 * 1024 } /* ... fileFilter ... */ });
 
 // ----------------------------------------------------------------------
 // MongoDB Connection and Management (Serverless friendly)
 // ----------------------------------------------------------------------
 
-// MONGODB_URI is read from Vercel environment variables
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/teamgenerator';
 let db;
 
@@ -67,14 +50,13 @@ async function connectDB() {
         db = client.db();
         console.log('Connected to MongoDB');
     } catch (error) {
-        // Now handles auth and SSL/DNS errors gracefully
         console.error('MongoDB connection error:', error);
         throw new Error('Database connection failed.'); 
     }
 }
 
 // ----------------------------------------------------------------------
-// Connection Middleware (Ensures DB connection on cold start)
+// Connection Middleware
 // ----------------------------------------------------------------------
 
 app.use(async (req, res, next) => {
@@ -83,7 +65,6 @@ app.use(async (req, res, next) => {
             await connectDB();
             next();
         } catch (error) {
-            // Send a 500 error if the connection fails
             res.status(500).json({ error: 'Internal Server Error: Database unavailable.' });
         }
     } else {
@@ -92,7 +73,7 @@ app.use(async (req, res, next) => {
 });
 
 // ----------------------------------------------------------------------
-// API Routes 
+// API Routes (File upload handling removed for stability)
 // ----------------------------------------------------------------------
 
 // Get all persons
@@ -106,28 +87,42 @@ app.get('/api/persons', async (req, res) => {
 });
 
 // Create person
-app.post('/api/persons', upload.single('photo'), async (req, res) => {
+// FIX: File upload middleware removed; added robust stats parsing
+app.post('/api/persons', async (req, res) => {
     try {
         const { name, stats } = req.body;
-        // NOTE: File upload requires external storage solution for persistence
-        const photo = req.file ? `Buffer_in_Memory:${req.file.size}` : null;
+        
+        let parsedStats;
+        if (!stats) {
+             return res.status(400).json({ error: 'Missing player stats in request.' });
+        }
+        try {
+            parsedStats = JSON.parse(stats);
+        } catch (parseError) {
+            return res.status(400).json({ error: 'Invalid format for player stats. Must be valid JSON string.' });
+        }
+        
+        const photo = null; 
         
         const person = {
             name,
-            stats: JSON.parse(stats),
+            stats: parsedStats, 
             photo, 
             createdAt: new Date()
         };
         
         const result = await db.collection('persons').insertOne(person);
-        res.status(201).json({ ...person, _id: result.insertedId });
+        res.status(201).json({ ...person, _id: result.insertedId }); 
+
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Database Error saving person:', error.message);
+        res.status(500).json({ error: error.message || 'Unknown database error saving person.' });
     }
 });
 
 // Update person
-app.put('/api/persons/:id', upload.single('photo'), async (req, res) => {
+// FIX: File upload middleware removed
+app.put('/api/persons/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { name, stats } = req.body;
@@ -138,9 +133,7 @@ app.put('/api/persons/:id', upload.single('photo'), async (req, res) => {
             updatedAt: new Date()
         };
         
-        if (req.file) {
-            updateData.photo = `Buffer_in_Memory:${req.file.size}`;
-        }
+        // Removed file update logic here.
         
         const result = await db.collection('persons').updateOne(
             { _id: new ObjectId(id) },
@@ -219,5 +212,4 @@ app.delete('/api/teams/:id', async (req, res) => {
 // ----------------------------------------------------------------------
 // VERCEL COMPATIBILITY FIX: Export the Express app instance
 
-// This is the handler Vercel executes.
 module.exports = app;

@@ -1,5 +1,6 @@
 // API Configuration
-const API_URL = 'http://localhost:3000/api';
+// FIX 1: Use the relative path for Vercel Serverless Functions
+const API_URL = '/api'; 
 
 // State Management
 let persons = [];
@@ -34,7 +35,8 @@ function setupEventListeners() {
     addPersonBtn.addEventListener('click', openAddPersonModal);
     closeModal.addEventListener('click', closePersonModal);
     cancelBtn.addEventListener('click', closePersonModal);
-    personForm.addEventListener('submit', handlePersonSubmit);
+    // FIX 2: handlePersonSubmit is now correct (see below)
+    personForm.addEventListener('submit', handlePersonSubmit); 
     generateBtn.addEventListener('click', generateTeams);
     saveTeamsBtn.addEventListener('click', saveCurrentTeams);
     photoInput.addEventListener('change', handlePhotoPreview);
@@ -59,6 +61,10 @@ async function loadPersons() {
     }
 }
 
+// FIX 3: Corrected the default avatar image path for the player card and team member display.
+// Assumes the file is now in the /public/assets folder.
+const DEFAULT_AVATAR_PATH = './assets/default-avatar.png'; 
+
 function renderPersons() {
     if (persons.length === 0) {
         personsGrid.innerHTML = '<div class="empty-state">No players yet. Add your first player!</div>';
@@ -68,10 +74,10 @@ function renderPersons() {
     personsGrid.innerHTML = persons.map(person => `
         <div class="player-card">
             <div class="player-card-content">
-                <img src="${person.photo || './public/assets/default-avatar.png'}" 
+                <img src="${person.photo || DEFAULT_AVATAR_PATH}" 
                      alt="${person.name}" 
                      class="player-photo"
-                     onerror="this.src='./public/assets/default-avatar.png'">
+                     onerror="this.src='${DEFAULT_AVATAR_PATH}'">
                 <div class="player-name">${person.name}</div>
                 <div class="player-stats">
                     <div class="stat-item">
@@ -121,23 +127,26 @@ function closePersonModal() {
     editingPersonId = null;
 }
 
+// FIX 4: Changed form submission from FormData (file-based) to JSON (data-based)
 async function handlePersonSubmit(e) {
     e.preventDefault();
     
-    const formData = new FormData();
-    formData.append('name', document.getElementById('person-name').value);
-    formData.append('stats', JSON.stringify({
+    // 1. Gather stats and serialize to JSON string
+    const statsPayload = JSON.stringify({
         pace: parseInt(document.getElementById('stat-pace').value),
         shooting: parseInt(document.getElementById('stat-shooting').value),
         passing: parseInt(document.getElementById('stat-passing').value),
         dribbling: parseInt(document.getElementById('stat-dribbling').value),
         defending: parseInt(document.getElementById('stat-defending').value),
         physical: parseInt(document.getElementById('stat-physical').value)
-    }));
+    });
     
-    if (photoInput.files[0]) {
-        formData.append('photo', photoInput.files[0]);
-    }
+    // 2. Construct the JSON body
+    const jsonBody = JSON.stringify({
+        name: document.getElementById('person-name').value,
+        stats: statsPayload, // The server expects this as a JSON string (due to how forms/middleware interact)
+        // Photo data is omitted as file upload is disabled
+    });
 
     try {
         const url = editingPersonId 
@@ -148,18 +157,26 @@ async function handlePersonSubmit(e) {
         
         const response = await fetch(url, {
             method: method,
-            body: formData
+            // CRITICAL FIX: Set header to application/json
+            headers: {
+                'Content-Type': 'application/json' 
+            },
+            body: jsonBody // Send clean JSON string
         });
 
         if (response.ok) {
+            // Check if the response includes the data payload (optional, but good practice)
+            // const savedPerson = await response.json(); 
             await loadPersons();
             closePersonModal();
         } else {
-            alert('Error saving person');
+            // Read and display the specific error message from the server
+            const errorData = await response.json();
+            alert(`Error saving person: ${errorData.error || response.statusText}`);
         }
     } catch (error) {
         console.error('Error saving person:', error);
-        alert('Error saving person');
+        alert('Error saving person: Network or unknown client issue.');
     }
 }
 
@@ -177,9 +194,9 @@ window.editPerson = async function(id) {
         document.getElementById('stat-defending').value = person.stats.defending;
         document.getElementById('stat-physical').value = person.stats.physical;
         
-        if (person.photo) {
-            photoPreview.innerHTML = `<img src="${person.photo}" alt="Preview">`;
-        }
+        // Use the new default path if photo is missing
+        const photoSrc = person.photo || DEFAULT_AVATAR_PATH;
+        photoPreview.innerHTML = `<img src="${photoSrc}" alt="Preview">`;
         
         personModal.style.display = 'block';
     }
@@ -205,6 +222,7 @@ window.deletePerson = async function(id) {
 };
 
 function handlePhotoPreview(e) {
+    // This function only works locally/client-side and does not affect server save logic
     const file = e.target.files[0];
     if (file) {
         const reader = new FileReader();
@@ -269,10 +287,10 @@ function renderTeams() {
                         const overall = Math.round(Object.values(member.stats).reduce((a, b) => a + b, 0) / 6);
                         return `
                             <div class="team-member">
-                                <img src="${member.photo || './public/assets/default-avatar.png'}" 
+                                <img src="${member.photo || DEFAULT_AVATAR_PATH}" 
                                      alt="${member.name}" 
                                      class="team-member-photo"
-                                     onerror="this.src='./public/assets/default-avatar.png'">
+                                     onerror="this.src='${DEFAULT_AVATAR_PATH}'">
                                 <div class="team-member-info">
                                     <div class="team-member-name">${member.name}</div>
                                     <div class="team-member-overall">OVR: ${overall}</div>

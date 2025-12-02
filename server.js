@@ -9,18 +9,33 @@ const app = express();
 // PORT is no longer strictly necessary for Vercel deployment, but can remain for local testing
 const PORT = process.env.PORT || 3000; 
 
+// Define the path to your static frontend files (Assuming they are in a 'public' folder)
+const staticPath = path.join(__dirname, 'public'); 
+
 // Middleware
 app.use(cors());
 app.use(express.json());
-// ⚠️ WARNING: These static file serving lines are generally not effective 
-// for persistent file storage/serving in Vercel Serverless Functions.
-app.use(express.static(__dirname));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// --------------------------------------------------------
+// FRONTEND SERVING FIX
+// --------------------------------------------------------
+
+// 1. Serve static files (CSS, JS, images, etc.) from the 'public' directory
+app.use(express.static(staticPath));
+
+// 2. Define the route for the root path ('/') to serve the index.html file
+app.get('/', (req, res) => {
+    // Send the index.html file from the staticPath
+    res.sendFile(path.join(staticPath, 'index.html'));
+});
+
+// NOTE: The previous lines below are removed/redundant now that we use the 'public' path:
+// app.use(express.static(__dirname));
+// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ----------------------------------------------------------------------
-// File Upload Configuration
-// ⚠️ WARNING: Disk Storage will not work for persistent storage on Vercel.
-// Use multer.memoryStorage() temporarily, and plan to use an external service (S3/Vercel Blob) later.
+// File Upload Configuration (rest of your backend code remains the same)
+// ----------------------------------------------------------------------
 
 // Using memory storage to prevent immediate errors on Vercel's read-only filesystem
 const storage = multer.memoryStorage(); 
@@ -60,7 +75,7 @@ async function connectDB() {
 }
 
 // ----------------------------------------------------------------------
-// NEW: Connection Middleware (for Serverless environment)
+// Connection Middleware (for Serverless environment)
 
 // This middleware ensures the DB connection is established before processing any request.
 app.use(async (req, res, next) => {
@@ -79,7 +94,7 @@ app.use(async (req, res, next) => {
 });
 
 // ----------------------------------------------------------------------
-// API Routes
+// API Routes (your existing API routes start here)
 
 // Get all persons
 app.get('/api/persons', async (req, res) => {
@@ -207,6 +222,5 @@ app.delete('/api/teams/:id', async (req, res) => {
 // ----------------------------------------------------------------------
 // VERCEL COMPATIBILITY FIX: Export the Express app instance
 
-// Removed the app.listen() call.
-// This is the line that tells Vercel's Serverless Runtime what to execute.
+// This is the handler Vercel executes.
 module.exports = app;

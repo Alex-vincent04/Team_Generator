@@ -6,38 +6,35 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
-// PORT is no longer strictly necessary for Vercel deployment, but can remain for local testing
+// PORT is kept for local development, ignored by Vercel
 const PORT = process.env.PORT || 3000; 
 
-// ✅ FIX: Set the static path to the current directory (__dirname) 
-// because index.html is in the root (Screenshot 83).
-const staticPath = __dirname; 
+// ✅ FIX: Define the static path to the 'public' folder. 
+// This requires index.html, style.css, and script.js to be moved there.
+const staticPath = path.join(__dirname, 'public'); 
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 // --------------------------------------------------------
-// FRONTEND SERVING FIX (Resolves "Cannot GET /")
+// FRONTEND SERVING FIX (Resolves "Cannot GET /" and 404s for static files)
 // --------------------------------------------------------
 
-// 1. Serve static files (CSS, JS, images, index.html) from the root directory
+// 1. Serve static files (CSS, JS, images, index.html) from the 'public' directory
 app.use(express.static(staticPath));
 
 // 2. Define the route for the root path ('/') to serve the index.html file
 app.get('/', (req, res) => {
-    // Send the index.html file from the root directory
+    // Send the index.html file from the public directory
     res.sendFile(path.join(staticPath, 'index.html'));
 });
-
-// NOTE: We rely on the project structure shown in Screenshot (83): 
-// index.html, style.css, script.js are all in the same directory as server.js.
 
 // ----------------------------------------------------------------------
 // File Upload Configuration (Using memory storage for Vercel compatibility)
 // ----------------------------------------------------------------------
 
-// Using memory storage to prevent immediate errors on Vercel's read-only filesystem
+// Using memory storage to prevent disk write errors on Vercel's read-only filesystem
 const storage = multer.memoryStorage(); 
 
 const upload = multer({ 
@@ -60,18 +57,18 @@ const upload = multer({
 // MongoDB Connection and Management (Serverless friendly)
 // ----------------------------------------------------------------------
 
+// MONGODB_URI is read from Vercel environment variables
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/teamgenerator';
 let db;
 
 async function connectDB() {
     try {
-        // Assume MONGODB_URI is now set correctly in Vercel environment variables
         const client = await MongoClient.connect(MONGODB_URI);
         db = client.db();
         console.log('Connected to MongoDB');
     } catch (error) {
+        // Now handles auth and SSL/DNS errors gracefully
         console.error('MongoDB connection error:', error);
-        // Throw an error to stop the serverless function if DB fails
         throw new Error('Database connection failed.'); 
     }
 }

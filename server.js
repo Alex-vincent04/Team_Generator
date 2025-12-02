@@ -9,32 +9,32 @@ const app = express();
 // PORT is no longer strictly necessary for Vercel deployment, but can remain for local testing
 const PORT = process.env.PORT || 3000; 
 
-// Define the path to your static frontend files (Assuming they are in a 'public' folder)
-const staticPath = path.join(__dirname, 'public'); 
+// ✅ FIX: Set the static path to the current directory (__dirname) 
+// because index.html is in the root (Screenshot 83).
+const staticPath = __dirname; 
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 // --------------------------------------------------------
-// FRONTEND SERVING FIX
+// FRONTEND SERVING FIX (Resolves "Cannot GET /")
 // --------------------------------------------------------
 
-// 1. Serve static files (CSS, JS, images, etc.) from the 'public' directory
+// 1. Serve static files (CSS, JS, images, index.html) from the root directory
 app.use(express.static(staticPath));
 
 // 2. Define the route for the root path ('/') to serve the index.html file
 app.get('/', (req, res) => {
-    // Send the index.html file from the staticPath
+    // Send the index.html file from the root directory
     res.sendFile(path.join(staticPath, 'index.html'));
 });
 
-// NOTE: The previous lines below are removed/redundant now that we use the 'public' path:
-// app.use(express.static(__dirname));
-// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// NOTE: We rely on the project structure shown in Screenshot (83): 
+// index.html, style.css, script.js are all in the same directory as server.js.
 
 // ----------------------------------------------------------------------
-// File Upload Configuration (rest of your backend code remains the same)
+// File Upload Configuration (Using memory storage for Vercel compatibility)
 // ----------------------------------------------------------------------
 
 // Using memory storage to prevent immediate errors on Vercel's read-only filesystem
@@ -57,29 +57,30 @@ const upload = multer({
 });
 
 // ----------------------------------------------------------------------
-// MongoDB Connection and Management
+// MongoDB Connection and Management (Serverless friendly)
+// ----------------------------------------------------------------------
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/teamgenerator';
 let db;
 
 async function connectDB() {
     try {
+        // Assume MONGODB_URI is now set correctly in Vercel environment variables
         const client = await MongoClient.connect(MONGODB_URI);
         db = client.db();
         console.log('Connected to MongoDB');
     } catch (error) {
-        // In a serverless environment, avoid process.exit(1). Let the function fail gracefully.
         console.error('MongoDB connection error:', error);
+        // Throw an error to stop the serverless function if DB fails
         throw new Error('Database connection failed.'); 
     }
 }
 
 // ----------------------------------------------------------------------
-// Connection Middleware (for Serverless environment)
+// Connection Middleware (Ensures DB connection on cold start)
+// ----------------------------------------------------------------------
 
-// This middleware ensures the DB connection is established before processing any request.
 app.use(async (req, res, next) => {
-    // If the 'db' variable is not set (first invocation or cold start), connect.
     if (!db) {
         try {
             await connectDB();
@@ -94,7 +95,8 @@ app.use(async (req, res, next) => {
 });
 
 // ----------------------------------------------------------------------
-// API Routes (your existing API routes start here)
+// API Routes 
+// ----------------------------------------------------------------------
 
 // Get all persons
 app.get('/api/persons', async (req, res) => {
@@ -110,14 +112,13 @@ app.get('/api/persons', async (req, res) => {
 app.post('/api/persons', upload.single('photo'), async (req, res) => {
     try {
         const { name, stats } = req.body;
-        // NOTE: req.file is a Buffer in memory now, not a file path.
-        // For persistence, you MUST upload this buffer to S3/Blob storage.
+        // NOTE: File upload requires external storage solution for persistence
         const photo = req.file ? `Buffer_in_Memory:${req.file.size}` : null;
         
         const person = {
             name,
             stats: JSON.parse(stats),
-            photo, // Storing the photo buffer size, pathing will fail.
+            photo, 
             createdAt: new Date()
         };
         
@@ -141,7 +142,6 @@ app.put('/api/persons/:id', upload.single('photo'), async (req, res) => {
         };
         
         if (req.file) {
-            // NOTE: File upload requires external storage solution.
             updateData.photo = `Buffer_in_Memory:${req.file.size}`;
         }
         
